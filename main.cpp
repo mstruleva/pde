@@ -7,39 +7,35 @@
 
 using namespace std;
 
-double eps_Sn = pow(10, -8);
-double eps_X = -1;
-
 void print_vector(vector<double> & v);
 
-vector<double> tridiagonal_solver(int N, vector<double> & a, vector<double> & b, vector<double> & c, vector<double> & f);
-
-double f_bound(double x){
-    return sin(M_PI*x) + x;
-}
-
-vector<double> slava_TDMA(int n, vector<double> & A, vector<double> & C, vector<double> & B, vector<double> & F)
+vector<double> TDMA(int N, const vector<double> & lw, const vector<double> & dg, const vector<double> & up, const vector<double> & rh)
 {
 
-    int N = n;
-    vector<double> s(N), m(N), y(N);
+    vector<double> ac = lw, bc = dg, cc = up, dc = rh;
 
-    s[1] = - B[0] / C[0];
-    m[1] = F[0] / C[0];
+    int nf = N+1;
+    vector<double> xc(nf);
 
-    for (int i = 1; i <= N -1; i++)
-    {
-        s[i+1] = - B[i] / (A[i]*s[i] + C[i]);
-        m[i+1] = (F[i] - A[i] * m[i])/(A[i] * s[i] + C[i]);
+    for (int i = 1; i < nf; ++i) {
+        //cout << "\n " << ac[i-1] << " " << bc[i-1] << endl;
+        double mc = ac[i-1]/bc[i-1];
+        //cout << " mc: " << mc;
+        bc[i] -= mc*cc[i-1];
+        dc[i] -= mc*dc[i-1];
     }
 
-    y[N] = (F[N] - A[N] * m[N])/(A[N] * s[N] + C[N]);
-
-    for (int i = N -1; i >= 0; i--)
-    {
-        y[i] = s[i+1] * y[i+1] + m[i+1];
+    xc = bc;
+    xc[nf-1] = dc[nf-1]/bc[nf-1];
+    for (int i = nf-2; i >=0 ; i--) {
+        xc[i] = (dc[i] - cc[i]*xc[i+1])/bc[i];
     }
-    return y;
+    return xc;
+}
+
+double f_bound(double x)
+{
+    return sin(M_PI*x) + x;
 }
 
 double f_cond(double x, double t){
@@ -52,7 +48,7 @@ double f_cond(double x, double t){
     u += S_k;
     //cout << S_k << endl;
     // k - количество слагаемых из ряда
-    for (int k = 0; k <= 80; k++){ //while(abs(S_k)>eps_Sn){
+    for (int k = 0; k <= 200; k++){ //while(abs(S_k)>eps_Sn){
         k +=1;
         l_k = pow((.5*M_PI + M_PI*k), 2);
         A_k = (-8*cos(M_PI*k))/M_PI/(4*k*k + 4*k - 3);
@@ -63,246 +59,298 @@ double f_cond(double x, double t){
     //cout << k << ' ';
     return  u;
 }
-// основная функция
-void solve(int N, int M, double tau, double SIGMA, bool show_here){
 
-    double h = 1/double(N);
-    double F = tau/h/h; //отношение tau/h^2 = F
-    double S = SIGMA; // вес схемы
+double f_condX(double x, double t){
+    return exp(-2.25*M_PI*M_PI*t) * sin(1.5*M_PI*x) + x;
+}
+
+void solve_imp(int N, int M, double F, double S)
+{
+    cout << "\nIMPLICIT:\n";
+    double h = 1.0/double(N);
+    double tau = h*h*F;
+
+    ofstream NUM("/Users/marinastruleva/Desktop/TEST/NUM_SOL.txt");
+    ofstream EXACT("/Users/marinastruleva/Desktop/TEST/EXACT_SOL.txt");
+    ofstream EXACT_X("/Users/marinastruleva/Desktop/TEST/EXACT_X.txt");
+
+    NUM << setprecision(8);
+    EXACT << setprecision(8);
+
+    //double eps_Tastr = -1;
+
+    for(int i=0; i < N+1; i++) {
+        NUM << i*h << "\t";// << u[i] << "\n";
+        EXACT << i*h << "\t";// << u[i] << "\n";
+        EXACT_X << i*h << "\t";// << u[i] << "\n";
+
+    }
+    NUM << "\n";
+    EXACT << "\n";
+    EXACT_X << "\n";
 
 
-    // запись в файл. NUM - численное решение, EXACT - точное. по строкам
+    vector<double> u(N+1), u_prev(N+1);
+
+    for (int j = 0; j < N + 1; ++j) {
+        u_prev[j] = f_bound(j*h);
+    }
+    cout << "\nu(x,0):";
+    print_vector(u_prev);
+
+    int m = 0;
+    double eps = 1e-5;
+    double eps_Tastr = 2;
+
+    while (eps_Tastr > eps){
+        eps_Tastr = -1;
+        u[0] = 0;
+        for (int j = 1; j < N; ++j) {
+            u[j] = F*(u_prev[j+1] - 2*u_prev[j] + u_prev[j-1]) + u_prev[j];
+        }
+        u[N] = (2*h - u[N-2] + 4*u[N-1])/3;
+        //cout << "u:";
+        //print_vector(u);
+        for (int k = 0; k < N+1; ++k) {
+            eps_Tastr = max(eps_Tastr, abs(u_prev[k]-u[k]));
+        }
+        //cout << "eps(" <<  m << ") = " << eps_Tastr << endl;
+
+        u_prev = u;
+
+        for(int i=0; i<N+1; i++) {
+            NUM << u[i] << "\t"; // << u[i] << "\n";
+            EXACT << f_cond(i*h, m*tau) << "\t"; // << u[i] << "\n";
+            EXACT_X << f_condX(i*h, m*tau) << "\t"; // << u[i] << "\n";
+        }
+
+        NUM << "\n";
+        EXACT << "\n";
+        EXACT_X << "\n";
+
+        m++;
+    }
+    cout << "m = " << m;
+    //for (int m = 0; m < M; ++m) {
+
+    cout << "\nu(x," << M*tau << "): ";
+    print_vector(u);
+}
+
+
+double EPS_solve_imp(int N, int M, double F, double S)
+{
+    double h = 1.0/double(N);
+    //cout << "\n N = "<<N << endl;
+    double tau = h*h*F;
+
+    vector<double> u(N+1), u_prev(N+1);
+
+    for (int j = 0; j < N + 1; ++j) {
+        u_prev[j] = f_bound(j*h);
+    }
+    //cout << "\nu(x,0):";
+    //print_vector(u_prev);
+    double eps_stable = 1e-5;
+    double eps_Tastr = 2;
+
+    double eps_T = -1;
+
+    int m = 0;
+    while (eps_Tastr > eps_stable){
+        eps_Tastr = -1;
+        double eps = -1;
+        u[0] = 0;
+        for (int j = 1; j < N; ++j) {
+            u[j] = F*(u_prev[j+1] - 2*u_prev[j] + u_prev[j-1]) + u_prev[j];
+        }
+        u[N] = (2*h - u[N-2] + 4*u[N-1])/3; //h + u[N-1];
+        for (int i = 0; i < N+1; ++i) {
+            eps = max(eps, abs(u[i] - f_cond(i*h, m*tau)));
+        }
+        for (int k = 0; k < N+1; ++k) {
+            eps_Tastr = max(eps_Tastr, abs(u_prev[k]-u[k]));
+        }
+        //cout << "T* = " << eps_Tastr << endl;
+        eps_T = max(eps_T, eps);
+        m++;
+        u_prev = u;
+        //cout << "eps_T = " << eps_T << endl;
+    }
+
+    cout << "\nm = " << m <<endl;
+    return eps_T;
+}
+
+double EPS_solve_exp(int N, int M, double F, double S)
+{
+    double h = 1.0/double(N);
+    //cout << "\n N = "<<N << endl;
+    double tau = h*h*F;
+
+    double eps_T = -1;
+
+    vector<double> u(N+1), u_prev(N+1);
+
+    for (int j = 0; j < N + 1; ++j) {
+        u_prev[j] = f_bound(j*h);
+    }
+
+    vector<double> LW(N), UP(N), DG(N+1), RH(N+1);
+    for (int k = 0; k < N; ++k) {
+        DG[k] = 1 + 2*F*S;
+        LW[k] = -F*S;
+        UP[k] = -F*S;
+    }
+    DG[0] = 1;
+    UP[0] = 0;
+    LW[N-1] = -4 + (1 + 2*F*S)/F/S; //0;
+    DG[N] = 2; //1;
+
+    for (int m = 0; m < M; ++m) {
+        double eps = -1;
+        RH[0] = 0;
+        for (int j = 1; j < N; ++j) {
+            RH[j] = u_prev[j] + (1 - S) * F * (u_prev[j - 1] - 2 * u_prev[j] + u_prev[j + 1]);
+        }
+        RH[N] = 2 * h + RH[N - 1] / F / S; //1;
+
+        u = TDMA(N, LW, DG, UP, RH);
+        u_prev = u;
+        for (int i = 0; i < N + 1; ++i) {
+            eps = max(eps, abs(u[i] - f_cond(i * h, m * tau)));
+        }
+        eps_T = max(eps_T, eps);
+    }
+    return eps_T;
+}
+
+void solve_exp(int N, int M, double F, double S)
+{
+    cout << "\nEXPLICIT:\n";
+    double h = 1.0/double(N);
+    double tau = h*h*F;
+
     ofstream NUM("/Users/marinastruleva/Desktop/TEST/NUM_SOL.txt");
     ofstream EXACT("/Users/marinastruleva/Desktop/TEST/EXACT_SOL.txt");
     NUM << setprecision(8);
     EXACT << setprecision(8);
 
-    cout << " for N = " << N << " M = "<< M << ": \n\n";
 
-    //F = tau/h/h;
-
-    cout << " h = " << h << ", tau = " << tau << ", M*tau = " << M*tau << endl;
-
-    vector<double> u(N+1), u_prev(N+1), u_real(N+1), u_lim(N+1);
-
-    for (int i = 0; i < N+1; ++i) {
-        u_prev[i] = f_bound(i*h);
-        u_lim[i] = i*h;
-        u_real[i] = f_cond(i*h, 0);
-    }
     for(int i=0; i < N+1; i++) {
         NUM << i*h << "\t";// << u[i] << "\n";
         EXACT << i*h << "\t";// << u[i] << "\n";
-        //file << endl; //<< u[i] << endl;
     }
     NUM << "\n";
     EXACT << "\n";
 
-    // если включено show_here, то решение выводится на экран
-    if (!show_here) {
-        for (int i = 0; i < N+1; ++i) cout << i*h << "\t";
-        cout << endl;
-        cout << "u_prev \n";
-        print_vector(u_prev);
+    vector<double> u(N+1), u_prev(N+1);
 
-        cout << "u_real \n";
-        print_vector(u_real);
-
+    for (int j = 0; j < N + 1; ++j) {
+        u_prev[j] = f_bound(j*h);
     }
-    //print_vector(u_real);
+    cout << "\nu(x,0):";
+    print_vector(u_prev);
 
-//Initializing the TDMA
-    //TDM_init(F, S, N);
-    /* ------------ MAIN PART ------------ */
-
-    vector<double> RH(N+1);
-
-    vector<double> LW(N), DG(N+1), UP(N);
-
+    vector<double> LW(N), UP(N), DG(N+1), RH(N+1);
+    for (int k = 0; k < N; ++k) {
+        DG[k] = 1 + 2*F*S;
+        LW[k] = -F*S;
+        UP[k] = -F*S;
+    }
     DG[0] = 1;
-    for(int i=1; i<N; i++){
-        DG[i] = 1 + 2*F*S;
-    }
-    DG[N] = 2; //1
-    LW[0] = -F*S;
     UP[0] = 0;
-    for(int i=1; i<N-1; i++){
-        LW[i] = -F*S;
-        UP[i] = -F*S;
-    }
-    LW[N-1] = -4 + (1+2*F*S)/(F*S);
-    UP[N-1] = -F*S;
-    cout << " F = " << F << endl;
-    if(!show_here) {
-        cout << "\n ******* \n";
-        cout << "LW: " << LW.size() << endl;
-        print_vector(LW);
-        cout << "DG: " << DG.size() << endl;
-        print_vector(DG);
-        cout << "UP: "<< UP.size()  << endl;
-        print_vector(UP);
-        cout << "\n ******* \n";
-    }
+    LW[N-1] = -4 + (1 + 2*F*S)/F/S; //0;
+    DG[N] = 2; //1;
 
+    int m = 0;
+    double eps = 1e-5;
+    double eps_Tastr = 2;
 
-    cout << "BEGIN " << F*S << endl;
-//RHS initialization
-// заполнение правой части RH и решение системы.
-    for (int m = 0; m < M; ++m) { //потом будет условный цикл
+    //for (int m = 0; m < M; ++m) {
+    while (eps_Tastr > eps){
+        eps_Tastr = -1;
         RH[0] = 0;
-        for (int j = 1; j < N; j++) {
+        for (int j = 1; j < N; ++j) {
             RH[j] = u_prev[j] + (1-S)*F*(u_prev[j-1] - 2*u_prev[j] + u_prev[j+1]);
         }
-        RH[N] = 2*h + RH[N-1]/S/F; // h;
-        if (!show_here) {
-            cout << endl;
-            for (int i = 0; i < N+1; ++i) {
-                cout << "RH[" << i << "]:" << RH[i] << endl;
-            }
+        RH[N] = 2*h + RH[N-1]/F/S; //1;
 
-            //print_vector(RH);
+        u = TDMA(N, LW, DG, UP, RH);
+
+        //cout << "u:";
+        //print_vector(u);
+        for (int k = 0; k < N+1; ++k) {
+            eps_Tastr = max(eps_Tastr, abs(u_prev[k]-u[k]));
         }
-        u = tridiagonal_solver(N, LW, DG, UP, RH);
-        if (!show_here) {
-            cout << "u_prev: \n";
-            print_vector(u_prev);
+        u_prev = u;
 
-            cout << "u: \n";
-            print_vector(u);
-        }
-
+        //cout << "eps(" <<  m << ") = " << eps_Tastr << endl;
         for(int i=0; i<N+1; i++) {
             NUM << u[i] << "\t"; // << u[i] << "\n";
             EXACT << f_cond(i*h, m*tau) << "\t"; // << u[i] << "\n";
-
         }
 
         NUM << "\n";
         EXACT << "\n";
-
-        // Evaluating the errors
-
-        u_prev = u;
-        if (show_here){
-            cout << "**\n*";
-            cout << "u_prev: \n";
-            print_vector(u_prev);
-
-            cout << "u: \n";
-            print_vector(u);
-        }
-
-        for(int i=0; i<N+1; i++) {
-            eps_X = max(eps_X, abs(u_prev[i] - u_real[i]));
-        }
-
-        //u.clear();
         //RH.clear();
-        cout << "m = " << m << endl;
+        //u.clear();
+        m++;
     }
+    cout << "\nu(x," << m*tau << "): ";
+    cout << "\n M = " << m << "\n tau*M = " << tau*m;
 
-    cout << "!!" << endl;
-// Writing results in file
-    //file << "HI!";
+    print_vector(u);
 
-    NUM.close();
-    EXACT.close();
-
-
-    cout << "*************" <<endl;
-    // проверка согласованности размеров
-    cout << "x: " << N+1 << endl;
-    cout << "u: " << u_prev.size() << endl;
-    cout << "LW: " << LW.size() << endl;
-    cout << "DG: " << DG.size() << endl;
-    cout << "UP: " << UP.size() << endl;
-
-    RH.clear();
-    u.clear();
-/*
-    string line;
-    ifstream fin("/Users/marinastruleva/Desktop/TEST/NUM_SOL.txt");
-    if(fin.is_open())
-    {
-        while ( getline (fin,line) )
-        {
-            cout << line << '\n';
-        }
-        fin.close();
-    }
-    else cerr<<"Unable to open file";
-*/
-
+    //
 }
 
-int main(){
+int main() {
     const clock_t begin_time = clock();
+    cout << "\t\t ======= BEGIN =====\n";
+    int N = 40;
+    int M = 20;
+    double F = .4;
+    double S = .5;
 
-    cout << setprecision(15);
-    int N = 10;
-    int M = 2;
-    double h = 1.0/double(N);
-    double tau = .25*h*h;
-    double Sigma = 1;
-    solve(N, M, tau, Sigma, false);
+    cout << "\nfor N = " << N << " M = " << M << " F = " << F << " S = " << S << endl;
+    solve_imp(N, M, F, S);
 
-    // проверка прогонки. работает
-    vector<double> a = {5, 2, 1, 0};
-    vector<double> b = {2, 10, 4, -1, 1};
-    vector<double> c = {0, 4, 1, 1};
-    vector<double> d = {1.3, 4.5, 7.8, 0, 2};
-    vector<double> t;
+    //eps count
+    int IT = 12;
+/*
+    cout << "\nTau convergence rate from M = " << M << " to " <<M*pow(2, IT+1) << ":" << endl;
+    for (int it = 2; it < IT; ++it) {
+        double eps_T = EPS_solve_exp(N, int(M*pow(2,it-1)), F/(pow(2,it-1)), S);
+        double eps_T2 = EPS_solve_exp(N, int(M*pow(2,it)), F/(pow(2,it)), S);
+        double eps_T4 = EPS_solve_exp(N, int(M*pow(2,it+1)), F/(pow(2,it+1)), S);
+        //cout << "\nM: " << M*pow(2,it-1) << "\t" << M*pow(2,it) << "\t"<< M*pow(2,it+1) << "\n";
+        //cout << "F: " << F/(pow(2,it-1)) << "\t" << F/(pow(2,it)) << "\t"<< F/(pow(2,it+1)) << "\n";
+        double res_t = (eps_T - eps_T2)/(eps_T2 - eps_T4);
+        cout << "\n\t" << res_t << endl;
+    }
+    */
+    /*
+    cout << "\nH convergence rate from N = " << N << " to " <<N*pow(2, IT) << ":" << endl;
+    double F_t = 1e-5;
 
-    cout << "\n" << b[0];
-    t = slava_TDMA(a.size(), a, b, c, d);
-    print_vector(t);
-
+    double eps_prev = EPS_solve_imp(N, M, F, S);
+    for (int it = 1; it < IT + 1; ++it) {
+        double eps_cur = EPS_solve_imp(int(N*pow(2, it)), M, F, S);
+        double res = eps_cur/eps_prev;
+        cout << N*pow(2, it) << "  \t" << res << endl;
+        eps_prev = eps_cur;
+    }
+//    */
+    cout << "\n\t\t ======= END =======";
     cout << "\n time used = "<< float( clock () - begin_time ) /  CLOCKS_PER_SEC;
-    cout << "\n!END!";
     return 0;
 }
 
-// Printing vectors
-void print_vector(vector<double> & v){
-    cout<<endl;
-    for(int i=0; i<v.size(); i++){
+void print_vector(vector<double> & v) {
+    cout << endl;
+    for (int i = 0; i < v.size(); i++) {
         cout << setprecision(7) << setw(5) << v[i] << "\t";
     }
-    cout<<endl;
+    cout << endl;
 }
-
-// Solving tridiagonal matrices
-
-
-vector<double> tridiagonal_solver(int N, vector<double> & a, vector<double> & b, vector<double> & c, vector<double> & f){
-
-    cout << "TD beg \n";
-    cout << setprecision(15);
-    int n = N+1;
-    vector<double> x(n);
-
-    for(int i=1; i<n; i++){
-
-        double m = a[i-1]/b[i-1];
-        b[i] -= m*c[i-1];
-        f[i] -= m*f[i-1];
-    }
-    cout << " b: \n";
-    for(int i=1; i<n; i++){
-        cout << b[i] << " ";
-    }
-    cout << "\n f: \n";
-    for(int i=1; i<n; i++){
-        cout << f[i] << " ";
-    }
-    // solve for last x value
-    x[n-1] = f[n-1]/b[n-1];
-
-    // solve for remaining x values by back substitution
-    for(int i=n-2; i >= 0; i--)
-        x[i] = (f[i]- c[i]*x[i+1])/b[i];
-
-    cout << "TD end \n";
-    return x;
-}
-
