@@ -1,0 +1,21 @@
+double f_cond(double x, double t){
+    double u = x;
+    int k = 0;
+    double l_k, A_k, S_k;
+    l_k = pow((.5*M_PI + M_PI*k), 2); //
+    A_k = (-8*cos(M_PI*k))/M_PI/(4*k*k + 4*k - 3); //
+    S_k = A_k*sin((M_PI*k + .5*M_PI)*x)*exp(-l_k*t);
+    u += S_k;
+    //cout << S_k << endl;
+    // k - количество слагаемых из ряда
+    for (int k = 0; k <= 200; k++){ //while(abs(S_k)>eps_Sn){
+        k +=1;
+        l_k = pow((.5*M_PI + M_PI*k), 2);
+        A_k = (-8*cos(M_PI*k))/M_PI/(4*k*k + 4*k - 3);
+        S_k = A_k*sin((M_PI*k + .5*M_PI)*x)*exp(-l_k*t);
+        u += S_k;
+        //cout << k << ' ';
+    }
+    //cout << k << ' ';
+    return  u;
+}
