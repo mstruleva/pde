@@ -1,0 +1,1 @@
+%h=plot(x,y(:,1),'-');dataE = load('EXACT_SOL.txt');dataN = load('NUM_SOL.txt');size(dataE);%print(data2)s = size(dataE)(1);axis ([-.2 1.5 -.2 2])xlabel('x')ylabel('y')x = linspace(0, 1, 100);for i=2:s  plot(dataN(1,:),dataN(i,:), dataN(1,:), dataE(i,:));  legend('num', 'exact');  pause(1e-1);endfor
