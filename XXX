@@ -1,0 +1,139 @@
+#include <iostream>
+#include <vector>
+#include <iomanip>
+#include <cmath>
+#include <fstream>
+#include <ctime>
+
+using namespace std;
+
+const int N=10;
+double pi = 3.1415926535897932;
+double U[N+1], F[N+1];
+double alpha[N+1], beta[N+1];
+double C, Cn=2.0, A = 1.0, B = 1.0, An, maxe = 0;
+double f(double x){
+    //return 0;
+    return sin(1.5*pi*x) + x;
+}
+double f_cond(double x, double t){
+    double u;
+    u = x;
+    double l_k, A_k, S_k;
+    for (int k = 0; k <= 200; k++){ //while(abs(S_k)>eps_Sn){
+        l_k = pow((0.5*pi + pi*k), 2);
+        if(k==1)
+            A_k = 1.0;
+        else
+            A_k = (2.0*k+1.0)*sin(pi*k)/(pi*(k-1)*(k+2));
+        S_k = A_k*sin((pi*k + 0.5*pi)*x)*exp(-l_k*t);
+        u += S_k;
+        //cout << k << ' ';
+    }
+    //cout << k << ' ';
+    return  u;
+}
+
+void solve(int N, double tau, double sigma)
+{
+
+}
+
+int main(){
+
+    double h = 1.0/N, tau = 1.0/ 1024, r, sigma = 1;
+    //ofstream file1("/Users/marinastruleva/Desktop/TEST/resX.txt");
+    //ofstream NUM("/Users/marinastruleva/Desktop/TEST/NUM_SOL.txt");
+    //ofstream EXACT("/Users/marinastruleva/Desktop/TEST/EXACT_SOL.txt");
+    double eps_max = -1;
+
+    r = (h * h)/(tau * sigma);
+    C = -r - 2.0;
+    An = r-2.0;
+    U[0] = 0;
+
+    cout << "h = " << h << endl;
+    cout << "tau = " << tau << endl;
+    cout << "sigma = " << sigma << endl;
+
+//��� t = 0;
+
+    //NUM << 0 << "\t";// << u[i] << "\n";
+    //EXACT << 0 << "\t";// << u[i] << "\n";
+    for(int i = 1; i<= N; i++){
+        U[i] = f(i*h);
+    //    NUM << i*h << "\t";// << u[i] << "\n";
+    //    EXACT << i*h << "\t";// << u[i] << "\n";
+        cout << i*h << "\t";
+    }
+    //NUM << "\n";
+    //EXACT << "\n";
+    cout << endl;
+    for (int step = 1; step <=500; step++){
+//������ ����� внутренние точки
+        for(int i = 1; i<N; i++){
+            F[i] = ((sigma - 1.0)/sigma) * ( U[i+1] - 2.0 * U[i] + U[i-1] ) - r * U[i];
+            // printf("%.15f\n", F[i]);
+        }
+        F[N] = 2*h - F[N-1];
+//����������� �����������
+        alpha[2] = -B/C;
+        beta[2] = F[1]/C;
+        //printf("%.15f", C);
+        for(int i = 2; i <= N - 1; i++){
+            alpha[i+1] = -(B / (A * alpha[i] + C));
+            beta[i+1] = (F[i] - A * beta[i]) / (A * alpha[i] + C);
+            //printf("%.15f \t %.15f\n", alpha[i], beta[i]);
+        }
+//������� ���� �������� ������
+        for(int i = 1; i<= N; i++){
+            U[i] = 0;
+        }
+//���������������� ������� �������
+        U[N] = (F[N] - An*beta[N]) / (Cn + An*alpha[N]);
+        //printf("\n%.15f", U[N]);
+// �� ������������
+        /* for(int i = N-1; i>0; i--){
+              U[i] = alpha[i+1] * U[i+1] + beta[i + 1];
+              if( U[i]-f_cond(i*h, step*tau) > maxe)
+                  maxe = U[i]-f_cond(i*h, step*tau);
+          }*/
+
+//�� �������
+
+        for(int i = N-1; i>0; i--){
+            U[i] = alpha[i+1] * U[i+1] + beta[i + 1];
+
+            if( U[1]-f_cond(h, step*tau) > maxe)
+                maxe = U[1]-f_cond(h, step*tau);
+        }
+
+        for (int j = 0; j < N+1; ++j) {
+        //    NUM << U[j] << "\t";// << u[i] << "\n";
+        //    EXACT << f_cond(j*h, step*tau) << "\t";// << u[i] << "\n";
+        }
+
+
+        //NUM << "\n";
+        //EXACT << "\n";
+
+        //file1 << maxe << endl;
+    }
+/*
+    printf("\n%.15f", 2*U[N]+(r-2)*U[N-1]-F[N]);
+    printf("\n%.15f", 2*U[N]+(r-2)*U[N-1]-2*h+F[N-1]);
+    printf("\n%.15f", -F[N]);
+    printf("\n%.15f",-2*h+F[N-1]);
+*/
+/*
+    for(int i = 0; i<N; i++){
+        fprintf(file, "[%.15f,%.15f], ",i*h, U[i]);
+    }
+    fprintf(file, "[1.0,%.15f]]:\n",U[N]);
+    fprintf(file,"\n plot(Q1, color = green)");
+    fclose(file);
+
+*/
+    cout << "\nEND!\n";
+}
+
