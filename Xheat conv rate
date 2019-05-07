@@ -94,6 +94,9 @@ double solve(int N, double tau, double sigma)
     return eps_max;
 }
 
+double tau_st(int N, double F){
+    return F/N/N;
+}
 int main(){
     const clock_t begin_time = clock();
     cout << "\t\t ======= BEGIN =====\n";
@@ -106,7 +109,7 @@ int main(){
 
     double sigma = .25;
     double F = .8;
- 
+
     for (int deg = 0; deg < DEG; ++deg) {
         double e1 = solve(int(N*pow(2,deg)), tau_st(int(N*pow(2,deg)), F), sigma);
         double e2 = solve(2*int(N*pow(2,deg)), tau_st(int(2*N*pow(2,deg)), F), sigma);
@@ -118,3 +121,5 @@ int main(){
     cout << "\n time used = "<< float( clock () - begin_time ) /  CLOCKS_PER_SEC;
     return 0;
 }
+
+// (solve(4N)- solve(2N))/((solve(2N)- solve(N))
