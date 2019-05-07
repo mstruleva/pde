@@ -1,0 +1,122 @@
+#include <iostream>
+#include <vector>
+#include <iomanip>
+#include <cmath>
+#include <fstream>
+#include <ctime>
+
+using namespace std;
+
+double pi = 3.1415926535897932;
+
+double f(double x){
+    return sin(1.5*pi*x) + x;
+}
+double f_cond(double x, double t){
+    double u;
+    u = x;
+    double l_k, A_k, S_k;
+    for (int k = 0; k <= 200; k++){ //while(abs(S_k)>eps_Sn){
+        l_k = pow((0.5*pi + pi*k), 2);
+        if(k==1)
+            A_k = 1.0;
+        else
+            A_k = (2.0*k+1.0)*sin(pi*k)/(pi*(k-1)*(k+2));
+        S_k = A_k*sin((pi*k + 0.5*pi)*x)*exp(-l_k*t);
+        u += S_k;
+    }
+
+    return  u;
+}
+
+double f_(double x){
+    return sin(M_PI*x) + x;
+}
+double f_cond_(double x, double t){
+    double u = x;
+    double pi = M_PI;
+    int k = 0;
+    double l_k, A_k, S_k;
+    for (int k = 0; k < 2000; k++) {
+        l_k = pow((.5*pi + pi*k),2);
+        A_k = (-8*cos(pi*k))/pi/(4*k*k+4*k-3);
+        S_k = A_k*sin((pi*k + .5*pi)*x)*exp(-l_k*t);
+        u += S_k;
+    }
+    return  u;
+}
+
+double solve(int N, double tau, double sigma)
+{
+    double h = 1.0/N;
+    double r;
+    vector<double> U(N+1), F(N+1);
+    vector<double> alpha(N+1), beta(N+1);
+    double C, Cn=2.0, A = 1.0, B = 1.0, An, maxe = 0;
+
+    double eps_max = -1;
+    r = (h * h)/(tau * sigma);
+    C = -r - 2.0;
+    An = r-2.0;
+    U[0] = 0;
+    for(int i = 1; i<= N; i++){
+        U[i] = f(i*h);
+    }
+    double E_stable = 2;
+    int m = 0;
+    while ((E_stable > 1e-5)&(E_stable < 3)){
+        E_stable = -1;
+    //for (int step = 1; step <=500; step++){
+        for(int i = 1; i<N; i++){
+            F[i] = ((sigma - 1.0)/sigma) * ( U[i+1] - 2.0 * U[i] + U[i-1] ) - r * U[i];
+        }
+        F[N] = 2*h - F[N-1];
+        alpha[2] = -B/C;
+        beta[2] = F[1]/C;
+        for(int i = 2; i <= N - 1; i++){
+            alpha[i+1] = -(B / (A * alpha[i] + C));
+            beta[i+1] = (F[i] - A * beta[i]) / (A * alpha[i] + C);
+        }
+        for(int i = 1; i<= N; i++){
+            U[i] = 0;
+        }
+        U[N] = (F[N] - An*beta[N]) / (Cn + An*alpha[N]);
+        for(int i = N-1; i>0; i--){
+            U[i] = alpha[i+1] * U[i+1] + beta[i + 1];
+            maxe = max(maxe, U[i]-f_cond(i*h, m*tau));
+        }
+        for (int i = 0; i < N + 1; ++i) {
+            E_stable = max(E_stable, fabs(U[i]-h*i));
+        }
+        eps_max = max(eps_max, maxe);
+        m++;
+    }
+    return eps_max;
+}
+
+int main(){
+    const clock_t begin_time = clock();
+    cout << "\t\t ======= BEGIN =====\n";
+
+
+        ///РАБОТАЕТ
+    cout << "h convergence rate:\n";
+    double N = 10;
+    int DEG = 5;
+
+    double sigma = .25;
+    double F = .8;
+ 
+    for (int deg = 0; deg < DEG; ++deg) {
+        double e1 = solve(int(N*pow(2,deg)), tau_st(int(N*pow(2,deg)), F), sigma);
+        double e2 = solve(2*int(N*pow(2,deg)), tau_st(int(2*N*pow(2,deg)), F), sigma);
+        double e4 = solve(4*int(N*pow(2,deg)), tau_st(int(4*N*pow(2,deg)), F), sigma);
+        cout << (e2-e1)/(e4-e2) << endl;
+    }
+
+    cout << "\n\t\t ======= END =======";
+    cout << "\n time used = "<< float( clock () - begin_time ) /  CLOCKS_PER_SEC;
+    return 0;
+}
+
+// (solve(4N)- solve(2N))/((solve(2N)- solve(N))
