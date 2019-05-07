@@ -118,5 +118,3 @@ int main(){
     cout << "\n time used = "<< float( clock () - begin_time ) /  CLOCKS_PER_SEC;
     return 0;
 }
-
-// (solve(4N)- solve(2N))/((solve(2N)- solve(N))
